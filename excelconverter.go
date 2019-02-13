@@ -20,21 +20,19 @@ func writeXLasCSV(filename string) error {
 	sheets := file.GetSheetMap()
 	fileNameWithExtension := path.Base(filename)
 	extension := path.Ext(filename)
-	fileNameNoExt := fileNameWithExtension[0 : len(fileNameWithExtension)-len(extension)]
-	for _, sheetName := range sheets {
-		fnames := []interface{}{fileNameNoExt, sheetName}
-		newFileName := fmt.Sprintf("output/%0s-%1s.csv", fnames[0], fnames[1])
+	fileNameNoExt := fileNameWithExtension[: len(fileNameWithExtension)-len(extension)]
+
+	for index, sheetName := range sheets {
+		newFileName := fmt.Sprintf("output/%0s-%1s.csv", fileNameNoExt, sheetName)
 		newFile, err := os.OpenFile(newFileName, os.O_RDWR|os.O_CREATE, 0755)
 		if err != nil {
 			return err
 		}
 		csvWriter := csv.NewWriter(newFile)
-		for index, name := range sheets {
-			fmt.Println(index, name)
-			err := csvWriter.WriteAll(file.GetRows(name))
-			if err != nil {
-				return err
-			}
+		fmt.Println(index, sheetName)
+		err = csvWriter.WriteAll(file.GetRows(sheetName))
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -53,11 +51,22 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 	return nil
 }
 
-func main() {
-	inputDir := flag.String("i", "input", "input directory of xlsx files")
+func parseInputDir() string {
+	inputDirFlag := flag.String("i", "input", "input directory of xlsx files")
 	flag.Parse()
-	rootPath := *inputDir
-	err := filepath.Walk(rootPath, walkFunc)
+	return *inputDirFlag
+}
+
+func ensureOutputDir() error {
+	outputDir := "./output"
+	return os.Mkdir(outputDir, 0777)
+}
+
+func main() {
+	inputDir := parseInputDir()
+	ensureOutputDir()
+
+	err := filepath.Walk(inputDir, walkFunc)
 	if err != nil {
 		log.Fatal("Fatal error", err)
 	}
