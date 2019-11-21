@@ -9,10 +9,10 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/360EntSecGroup-Skylar/excelize"
+	"github.com/360EntSecGroup-Skylar/excelize/v2"
 )
 
-func writeXLasCSV(filename string) error {
+func writeXLasCSV(filename string, ignoreHidden bool) error {
 	file, err := excelize.OpenFile(filename)
 	if err != nil {
 		return err
@@ -20,9 +20,12 @@ func writeXLasCSV(filename string) error {
 	sheets := file.GetSheetMap()
 	fileNameWithExtension := path.Base(filename)
 	extension := path.Ext(filename)
-	fileNameNoExt := fileNameWithExtension[: len(fileNameWithExtension)-len(extension)]
-
+	fileNameNoExt := fileNameWithExtension[:len(fileNameWithExtension)-len(extension)]
 	for index, sheetName := range sheets {
+		visible := file.GetSheetVisible(sheetName)
+		if visible == false && ignoreHidden == true {
+			return nil
+		}
 		newFileName := fmt.Sprintf("output/%0s-%1s.csv", fileNameNoExt, sheetName)
 		newFile, err := os.OpenFile(newFileName, os.O_RDWR|os.O_CREATE, 0755)
 		if err != nil {
@@ -30,7 +33,11 @@ func writeXLasCSV(filename string) error {
 		}
 		csvWriter := csv.NewWriter(newFile)
 		fmt.Println(index, sheetName)
-		err = csvWriter.WriteAll(file.GetRows(sheetName))
+		rows, err := file.GetRows(sheetName)
+		if err != nil {
+			return err
+		}
+		err = csvWriter.WriteAll(rows)
 		if err != nil {
 			return err
 		}
@@ -38,12 +45,12 @@ func writeXLasCSV(filename string) error {
 	return nil
 }
 
-func walkFunc(path string, info os.FileInfo, err error) error {
+func walkFunc(path string, info os.FileInfo, err error, ignoreHidden bool) error {
 	if err != nil {
 		return err
 	}
 	if !info.IsDir() && filepath.Ext(info.Name()) == ".xlsx" {
-		err := writeXLasCSV(path)
+		err := writeXLasCSV(path, ignoreHidden)
 		if err != nil {
 			return err
 		}
@@ -51,10 +58,17 @@ func walkFunc(path string, info os.FileInfo, err error) error {
 	return nil
 }
 
-func parseInputDir() string {
+func wrapWalkFunc(ignoreHidden bool) filepath.WalkFunc {
+	return func(path string, info os.FileInfo, err error) error {
+		return walkFunc(path, info, err, ignoreHidden)
+	}
+}
+
+func parseFlags() (string, bool) {
 	inputDirFlag := flag.String("i", "input", "input directory of xlsx files")
+	ignoreHidden := flag.Bool("h", true, "ignore hidden xlsx sheets")
 	flag.Parse()
-	return *inputDirFlag
+	return *inputDirFlag, *ignoreHidden
 }
 
 func ensureOutputDir() error {
@@ -63,10 +77,13 @@ func ensureOutputDir() error {
 }
 
 func main() {
-	inputDir := parseInputDir()
+	inputDir, ignoreHidden := parseFlags()
+
 	ensureOutputDir()
 
-	err := filepath.Walk(inputDir, walkFunc)
+	wrappedWalkFunc := wrapWalkFunc(ignoreHidden)
+
+	err := filepath.Walk(inputDir, wrappedWalkFunc)
 	if err != nil {
 		log.Fatal("Fatal error", err)
 	}
