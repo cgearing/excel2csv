@@ -64,7 +64,7 @@ func wrapWalkFunc(ignoreHidden bool) filepath.WalkFunc {
 	}
 }
 
-func parseInputDir() (string, bool) {
+func parseFlags() (string, bool) {
 	inputDirFlag := flag.String("i", "input", "input directory of xlsx files")
 	ignoreHidden := flag.Bool("h", true, "ignore hidden xlsx sheets")
 	flag.Parse()
@@ -77,7 +77,7 @@ func ensureOutputDir() error {
 }
 
 func main() {
-	inputDir, ignoreHidden := parseInputDir()
+	inputDir, ignoreHidden := parseFlags()
 
 	ensureOutputDir()
 
